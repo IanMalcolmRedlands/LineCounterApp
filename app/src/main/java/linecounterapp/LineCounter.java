@@ -8,13 +8,15 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class LineCounter {
-	HashMap<String, Integer> controlCounts;
+	HashMap<String, Integer> methodCounts; //tallies number of lines in method definitions
+	HashMap<String, Integer> controlCounts; //tallies number of times each control type is used
+	
 	private Matcher singleCommentMatcher, multiCommentBeginMatcher, multiCommentEndMatcher;
 	private Matcher whitespaceMatcher;
 	private Matcher methodMatcher;
 	private Matcher elseMatcher;
 	private Matcher controlMatcher; //also matches methods, so should be used only if methodMatcher didn't match
-	private Matcher openBracketMatcher, closeBracketMatcher, terminatingSemicolonMatcher;
+	private Matcher openBracketMatcher, closeBracketMatcher, semicolonMatcher;
 	
 	public LineCounter() {
 		controlCounts = new HashMap<String, Integer>();
@@ -39,6 +41,15 @@ public class LineCounter {
 		
 		Pattern controlPattern = Pattern.compile("^\\s*(\\w+(?: \\w+)*)\\s*\\(.*\\).*$(?<!;)");
 		controlMatcher = controlPattern.matcher("");
+		
+		Pattern openBracketPattern = Pattern.compile("^.*\\{.*$");
+		openBracketMatcher = openBracketPattern.matcher("");
+		
+		Pattern closeBracketPattern = Pattern.compile("^.*\\}.*$");
+		closeBracketMatcher = closeBracketPattern.matcher("");
+
+		Pattern semicolonPattern = Pattern.compile("^.*;.*$");
+		semicolonMatcher = semicolonPattern.matcher("");
 	}
 	
 	/**
@@ -57,17 +68,21 @@ public class LineCounter {
 	}
 	
 	private String readFile(Scanner reader) {
+		int unclosedBraces = 0; //counts number of unclosed braces left in method definition
+		boolean inMultiComment = false;
+		
 		int linecount = 0;
 		int singleComments = 0;
-		int multiComments = 0;
-		int whitespace = 0;
-		boolean inMultiComment = false;
+		int multiCommentLines = 0;
+		int emptyLines = 0;
+		
 		
 		while (reader.hasNextLine()) {
 			String line = reader.nextLine();
 			
+			//not-code lines
 			if (inMultiComment) {
-				multiComments++;
+				multiCommentLines++;
 				if (isMultiCommentEnd(line)) {
 					inMultiComment = false;
 				}
@@ -75,7 +90,7 @@ public class LineCounter {
 			}
 			
 			else if (isWhitespace(line)) {
-				whitespace++;
+				emptyLines++;
 				continue;
 			}
 			
@@ -87,11 +102,13 @@ public class LineCounter {
 			else if (isMultiCommentBegin(line)) {
 				if (!isMultiCommentEnd(line)) {
 					inMultiComment = true;
-					multiComments++;
+					multiCommentLines++;
 				}
 				continue; 
 			}
 			
+			
+			//code lines
 			linecount++;
 			
 			if (isMethod(line)) {
@@ -122,8 +139,8 @@ public class LineCounter {
 		}
 		
 		return "Line count: "+linecount+"\nSingle line comments: "+singleComments+
-				"\nMulti line comments line count: "+multiComments+
-				"\nWhitespace (blank lines): "+whitespace+
+				"\nMulti line comments line count: "+multiCommentLines+
+				"\nEmpty lines: "+emptyLines+
 				"\nControl Structures: "+controlCounts.toString();
 	}
 	
@@ -160,5 +177,20 @@ public class LineCounter {
 	private boolean isElse(String line) {
 		elseMatcher.reset(line);
 		return elseMatcher.matches();
+	}
+	
+	private boolean hasSemicolon(String line) {
+		semicolonMatcher.reset(line);
+		return semicolonMatcher.matches();
+	}
+	
+	private boolean hasOpeningBracket(String line) {
+		openBracketMatcher.reset(line);
+		return openBracketMatcher.matches();
+	}
+	
+	private boolean hasClosingBracket(String line) {
+		closeBracketMatcher.reset(line);
+		return closeBracketMatcher.matches();
 	}
 }
