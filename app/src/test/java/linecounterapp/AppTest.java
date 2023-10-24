@@ -6,8 +6,10 @@ package linecounterapp;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.io.File;
+
 class AppTest {
-    @Test void appHasAGreeting() {
+    @Test void appHasAGreeting() {    	
         App classUnderTest = new App();
     }
 }
