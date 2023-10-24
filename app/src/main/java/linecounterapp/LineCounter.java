@@ -2,14 +2,26 @@ package linecounterapp;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+
+
+/**
+ * Class to analyze .java files and store data about their contents.
+ */
 public class LineCounter {
 	HashMap<String, Integer> methodCounts; //tallies number of lines in method definitions
 	HashMap<String, Integer> controlCounts; //tallies number of times each control type is used
+
+	int linecount;
+	int nonCodeLines;
 	
 	private Matcher singleCommentMatcher, multiCommentBeginMatcher, multiCommentEndMatcher;
 	private Matcher whitespaceMatcher;
@@ -19,7 +31,11 @@ public class LineCounter {
 	private Matcher openBracketMatcher, closeBracketMatcher, semicolonMatcher;
 	
 	public LineCounter() {
+		methodCounts = new HashMap<String, Integer>();
 		controlCounts = new HashMap<String, Integer>();
+		
+		linecount = 0;
+		nonCodeLines = 0;
 		
 		Pattern singleCommentPattern = Pattern.compile("^\\s*//.*$");
 		singleCommentMatcher = singleCommentPattern.matcher("");
@@ -67,42 +83,47 @@ public class LineCounter {
 		}
 	}
 	
+	/**
+	 * This code is arguably still readable
+	 * @param reader
+	 * @return
+	 */
 	private String readFile(Scanner reader) {
+		//Variables to keep track of methods
+		String currentMethod = "";
 		int unclosedBraces = 0; //counts number of unclosed braces left in method definition
-		boolean inMultiComment = false;
+		boolean expectingMethodOpeningBracket = false;
+		boolean withinMethod = false;
 		
-		int linecount = 0;
-		int singleComments = 0;
-		int multiCommentLines = 0;
-		int emptyLines = 0;
+		boolean withinMultiComment = false;
 		
 		
 		while (reader.hasNextLine()) {
 			String line = reader.nextLine();
 			
 			//not-code lines
-			if (inMultiComment) {
-				multiCommentLines++;
+			if (withinMultiComment) {
+				nonCodeLines++;
 				if (isMultiCommentEnd(line)) {
-					inMultiComment = false;
+					withinMultiComment = false;
 				}
 				continue;
 			}
 			
 			else if (isWhitespace(line)) {
-				emptyLines++;
+				nonCodeLines++;
 				continue;
 			}
 			
 			else if (isSingleLineComment(line)) {
-				singleComments++;
+				nonCodeLines++;
 				continue;
 			}
 			
 			else if (isMultiCommentBegin(line)) {
+				nonCodeLines++;
 				if (!isMultiCommentEnd(line)) {
-					inMultiComment = true;
-					multiCommentLines++;
+					withinMultiComment = true;
 				}
 				continue; 
 			}
@@ -111,9 +132,43 @@ public class LineCounter {
 			//code lines
 			linecount++;
 			
-			if (isMethod(line)) {
-				System.out.println("Method: "+methodMatcher.group(1));
-				//TODO: keep track of methods
+			if (expectingMethodOpeningBracket) {
+				if (hasOpeningBracket(line)) {
+					unclosedBraces = 1;
+					expectingMethodOpeningBracket = false;
+					withinMethod = true;
+				}
+				continue;
+			}
+			
+			if (withinMethod) {
+				if (hasOpeningBracket(line)) {
+					unclosedBraces++;
+				}
+				if (hasClosingBracket(line)) {
+					unclosedBraces--;
+					if (unclosedBraces < 1) {
+						withinMethod = false;
+					}
+				}
+				methodCounts.replace(currentMethod, methodCounts.get(currentMethod)+1);
+			}
+			
+			else if (isMethod(line)) {
+				currentMethod = methodMatcher.group(1);
+				methodCounts.put(currentMethod, 0);
+				
+				if (hasSemicolon(line)) {
+					continue;
+				}
+				else if (hasOpeningBracket(line)) {
+					unclosedBraces = 1;
+					withinMethod = true;
+				}
+				else {
+					expectingMethodOpeningBracket = true;
+				}
+				
 				continue;
 			}
 			
@@ -127,7 +182,7 @@ public class LineCounter {
 				continue;
 			}
 			
-			if (isControlStructure(line)) {
+			else if (isControlStructure(line)) {
 				String name = controlMatcher.group(1);
 				if (controlCounts.get(name) == null) {
 					controlCounts.put(name, 1);
@@ -138,10 +193,62 @@ public class LineCounter {
 			}
 		}
 		
-		return "Line count: "+linecount+"\nSingle line comments: "+singleComments+
-				"\nMulti line comments line count: "+multiCommentLines+
-				"\nEmpty lines: "+emptyLines+
-				"\nControl Structures: "+controlCounts.toString();
+		return "Stripped Line Count: "+linecount+
+				"\nEmpty Lines: "+nonCodeLines;
+	}
+	
+	/**
+	 * Returns an ObservableList&ltCountValue&gt of the methods in the file. Meant for use with javafx tables.
+	 * @return Counts of method lengths in the form of an ObservableList&ltCountValue&gt
+	 */
+	public ObservableList<CountValue> getMethodsList() {
+		ArrayList<CountValue> list = new ArrayList<CountValue>();
+		
+		ArrayList<String> keys = new ArrayList<String>(methodCounts.keySet());
+		Collections.sort(keys);
+		
+		for (String key : keys) {
+			list.add(new CountValue(key, methodCounts.get(key)));
+		}
+		
+		return FXCollections.observableArrayList(list);
+	}
+	
+	/**
+	 * Returns an ObservableList&ltCountValue&gt of the counts of control structures in the file. Meant for use with javafx tables.
+	 * @return Counts of control structures in the form of an ObservableList&ltCountValue&gt
+	 */
+	public ObservableList<CountValue> getControlList() {
+		ArrayList<CountValue> list = new ArrayList<CountValue>();
+		
+		ArrayList<String> keys = new ArrayList<String>(controlCounts.keySet());
+		Collections.sort(keys);
+		
+		for (String key : keys) {
+			list.add(new CountValue(key, controlCounts.get(key)));
+		}
+		
+		return FXCollections.observableArrayList(list);
+	}
+	
+	/**
+	 * Creates a text table of a count hashmap.
+	 * @param label1 Title of first column (the names)
+	 * @param label2 Title of second column (the counts)
+	 * @param map
+	 * @return
+	 */
+	private String formatCountHashmap(String label1, String label2, HashMap<String, Integer> map) {
+		String table = String.format("%-50s | %-10s", label1.toUpperCase(), label2.toUpperCase());
+		
+		ArrayList<String> keys = new ArrayList<String>(map.keySet());
+		Collections.sort(keys);
+		
+		for (String key : keys) {
+			table += String.format("\n%-50s | %-10s", key, map.get(key));
+		}
+		
+		return table;
 	}
 	
 	private boolean isSingleLineComment(String line) {

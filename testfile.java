@@ -45,6 +45,14 @@ void   fakeFunction2 ();
 			return;
 		}
 		
+		for (int i=0; i<10000; i++) {
+			for (char character : test2) {
+				while (true) {
+					apple.eat();
+				}
+			}
+		}
+		
 		for (char character : test2) {
 			return;
 		}
