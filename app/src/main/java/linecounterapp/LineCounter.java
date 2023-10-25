@@ -28,7 +28,9 @@ public class LineCounter {
 	private Matcher methodMatcher;
 	private Matcher elseMatcher;
 	private Matcher controlMatcher; //also matches methods, so should be used only if methodMatcher didn't match
-	private Matcher openBracketMatcher, closeBracketMatcher, semicolonMatcher;
+	private Matcher openBracketMatcher, openBracketInStringMatcher;
+	private Matcher closeBracketMatcher, closeBracketInStringMatcher;
+	private Matcher semicolonMatcher;
 	
 	public LineCounter() {
 		methodCounts = new HashMap<String, Integer>();
@@ -49,7 +51,7 @@ public class LineCounter {
 		Pattern whitespacePattern = Pattern.compile("^\\s*$");
 		whitespaceMatcher = whitespacePattern.matcher("");
 		
-		Pattern methodPattern = Pattern.compile("^\\h*.*\\w+(?<!new)\\h+(\\w+\\h*\\((?:\\w+\\h+\\w+,*\\h*)*\\)).*$");
+		Pattern methodPattern = Pattern.compile("^\\h*.*[\\w <>,]+(?<!new)\\h+(\\w+\\h*\\((?:[\\w <>,]+\\h+\\w+,?\\h*)*\\)).*$");
 		methodMatcher = methodPattern.matcher("");
 		
 		Pattern elsePattern = Pattern.compile("^\\s*else\\s*\\{?$");
@@ -60,9 +62,13 @@ public class LineCounter {
 		
 		Pattern openBracketPattern = Pattern.compile("^.*\\{.*$");
 		openBracketMatcher = openBracketPattern.matcher("");
+		Pattern openBracketInStringPattern = Pattern.compile("^.*\\\".*\\{.*\\\".*$");
+		openBracketInStringMatcher = openBracketInStringPattern.matcher("");
 		
 		Pattern closeBracketPattern = Pattern.compile("^.*\\}.*$");
 		closeBracketMatcher = closeBracketPattern.matcher("");
+		Pattern closeBracketInStringPattern = Pattern.compile("^.*\\\".*\\}.*\\\".*$");
+		closeBracketInStringMatcher = closeBracketInStringPattern.matcher("");
 
 		Pattern semicolonPattern = Pattern.compile("^.*;.*$");
 		semicolonMatcher = semicolonPattern.matcher("");
@@ -293,11 +299,13 @@ public class LineCounter {
 	
 	private boolean hasOpeningBracket(String line) {
 		openBracketMatcher.reset(line);
-		return openBracketMatcher.matches();
+		openBracketInStringMatcher.reset(line);
+		return openBracketMatcher.matches() && !openBracketInStringMatcher.matches();
 	}
 	
 	private boolean hasClosingBracket(String line) {
 		closeBracketMatcher.reset(line);
-		return closeBracketMatcher.matches();
+		closeBracketInStringMatcher.reset(line);
+		return closeBracketMatcher.matches() && !closeBracketInStringMatcher.matches();
 	}
 }
